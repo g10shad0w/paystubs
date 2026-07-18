@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: payroll-tools
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NO_BROWSER
+        value: "1"

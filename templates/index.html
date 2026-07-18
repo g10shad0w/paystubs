@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payroll Tools</title>
+<style>
+  :root{ --navy:#1F3864; --blue:#2E75B6; --green:#375623; --line:#e3e8ef; --bg:#f4f6fb; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+        background:var(--bg); color:#1a2233; }
+  header{ background:var(--navy); color:#fff; padding:26px 20px; text-align:center; }
+  header h1{ margin:0; font-size:26px; letter-spacing:.3px; }
+  header p{ margin:6px 0 0; opacity:.8; font-size:14px; }
+  main{ max-width:900px; margin:26px auto; padding:0 16px; display:grid; gap:22px; }
+  .card{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:22px 22px 20px;
+         box-shadow:0 1px 3px rgba(20,30,60,.06); }
+  .card h2{ margin:0 0 4px; font-size:19px; }
+  .card .sub{ margin:0 0 16px; color:#61708a; font-size:13.5px; line-height:1.5; }
+  .row{ display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+  .drop{ flex:1 1 240px; min-height:64px; border:2px dashed #c6d0e0; border-radius:10px;
+         display:flex; align-items:center; justify-content:center; text-align:center;
+         padding:12px; color:#4a5a75; font-size:14px; cursor:pointer; background:#fafcff;
+         transition:.15s; }
+  .drop:hover{ border-color:var(--blue); background:#f0f6ff; }
+  .drop.have{ border-style:solid; border-color:var(--green); background:#f1f7ef; color:var(--green); font-weight:600; }
+  .drop small{ display:block; color:#8a97ad; font-weight:400; margin-top:2px; }
+  input[type=file]{ display:none; }
+  button.go{ background:var(--blue); color:#fff; border:0; border-radius:10px; padding:13px 22px;
+             font-size:15px; font-weight:600; cursor:pointer; transition:.15s; }
+  button.go:hover{ background:#255f97; }
+  button.go:disabled{ background:#a9b6c9; cursor:not-allowed; }
+  .status{ margin-top:12px; font-size:13.5px; min-height:18px; }
+  .status.err{ color:#b3261e; white-space:pre-wrap; }
+  .status.ok{ color:var(--green); font-weight:600; }
+  .status.busy{ color:var(--blue); }
+  details{ margin-top:12px; }
+  summary{ cursor:pointer; color:var(--blue); font-size:13px; }
+  textarea{ width:100%; margin-top:8px; border:1px solid var(--line); border-radius:8px;
+            padding:8px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; min-height:80px; }
+  .spin{ display:inline-block; width:14px; height:14px; border:2px solid #cfe0f3;
+         border-top-color:var(--blue); border-radius:50%; animation:sp .7s linear infinite;
+         vertical-align:-2px; margin-right:6px; }
+  @keyframes sp{ to{ transform:rotate(360deg); } }
+  footer{ text-align:center; color:#8a97ad; font-size:12px; padding:20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Payroll Tools</h1>
+  <p>Upload a file, press the button, get your file back.</p>
+</header>
+<main>
+
+  <!-- TOOL 1 -->
+  <section class="card" id="tool1">
+    <h2>1 &nbsp;Paystub &rarr; Time Cards</h2>
+    <p class="sub">Upload a W2 <b>paystubs PDF</b>. Get an Excel workbook with one formatted time card per employee, hours totaling each paystub.</p>
+    <div class="row">
+      <label class="drop" data-for="t1pdf">Choose paystubs PDF<small>.pdf</small>
+        <input type="file" id="t1pdf" accept=".pdf"></label>
+      <button class="go" data-tool="t1">Make Time Cards (.xlsx)</button>
+    </div>
+    <details>
+      <summary>Optional: days off per employee (JSON)</summary>
+      <textarea id="t1days" placeholder='{"Mariya": ["Mon"], "Qadir": ["Tue","Fri"]}'></textarea>
+    </details>
+    <div class="status" id="t1status"></div>
+  </section>
+
+  <!-- TOOL 2 -->
+  <section class="card" id="tool2">
+    <h2>2 &nbsp;Time Card &rarr; PDF</h2>
+    <p class="sub">Upload a timecard <b>.xlsx</b> workbook. Get a PDF with one employee per page. The <i>Staff Schedule</i> summary sheet is dropped automatically.</p>
+    <div class="row">
+      <label class="drop" data-for="t2xlsx">Choose timecard .xlsx<small>.xlsx</small>
+        <input type="file" id="t2xlsx" accept=".xlsx,.xlsm"></label>
+      <button class="go" data-tool="t2">Make PDF</button>
+    </div>
+    <div class="status" id="t2status"></div>
+  </section>
+
+  <!-- TOOL 3 -->
+  <section class="card" id="tool3">
+    <h2>3 &nbsp;Combine Paystubs + Time Cards</h2>
+    <p class="sub">Upload a <b>paystubs PDF</b> and a <b>time cards PDF</b>. Get one PDF with each employee's paystub on top and their matching time card below, one per page. Employees are matched automatically by name and hours.</p>
+    <div class="row">
+      <label class="drop" data-for="t3ps">Choose paystubs PDF<small>.pdf</small>
+        <input type="file" id="t3ps" accept=".pdf"></label>
+      <label class="drop" data-for="t3tc">Choose time cards PDF<small>.pdf</small>
+        <input type="file" id="t3tc" accept=".pdf"></label>
+      <button class="go" data-tool="t3">Combine</button>
+    </div>
+    <div class="status" id="t3status"></div>
+  </section>
+
+</main>
+<footer>Runs entirely on this computer. Time cards are a model total, not a real attendance record.</footer>
+
+<script>
+function bind(id){
+  const input=document.getElementById(id);
+  const label=document.querySelector(`.drop[data-for="${id}"]`);
+  input.addEventListener('change',()=>{
+    if(input.files.length){ label.classList.add('have');
+      label.firstChild.textContent=input.files[0].name; }
+  });
+  // drag & drop
+  label.addEventListener('dragover',e=>{e.preventDefault();label.style.borderColor='#2E75B6';});
+  label.addEventListener('dragleave',()=>{label.style.borderColor='';});
+  label.addEventListener('drop',e=>{e.preventDefault();label.style.borderColor='';
+    if(e.dataTransfer.files.length){ input.files=e.dataTransfer.files;
+      input.dispatchEvent(new Event('change')); }});
+}
+['t1pdf','t2xlsx','t3ps','t3tc'].forEach(bind);
+
+function setStatus(el,cls,html){ el.className='status '+cls; el.innerHTML=html; }
+
+async function post(url,fd,statusEl,btn){
+  setStatus(statusEl,'busy','<span class="spin"></span>Working… this can take a moment.');
+  btn.disabled=true;
+  try{
+    const res=await fetch(url,{method:'POST',body:fd});
+    if(!res.ok){ let msg; try{ msg=(await res.json()).error; }catch{ msg=await res.text(); }
+      setStatus(statusEl,'err','⚠ '+(msg||('Error '+res.status))); return; }
+    const blob=await res.blob();
+    const dispo=res.headers.get('Content-Disposition')||'';
+    const m=dispo.match(/filename="?([^"]+)"?/); const fname=m?m[1]:'output';
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=fname; document.body.appendChild(a); a.click(); a.remove();
+    setStatus(statusEl,'ok','✓ Done — '+fname+' downloaded.');
+  }catch(e){ setStatus(statusEl,'err','⚠ '+e.message); }
+  finally{ btn.disabled=false; }
+}
+
+document.querySelectorAll('button.go').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const tool=btn.dataset.tool;
+    if(tool==='t1'){
+      const f=document.getElementById('t1pdf').files[0];
+      const s=document.getElementById('t1status');
+      if(!f){ setStatus(s,'err','Please choose a paystubs PDF first.'); return; }
+      const fd=new FormData(); fd.append('pdf',f);
+      const days=document.getElementById('t1days').value.trim();
+      if(days) fd.append('daysoff_text',days);
+      post('/api/paystub-to-timecards',fd,s,btn);
+    }
+    if(tool==='t2'){
+      const f=document.getElementById('t2xlsx').files[0];
+      const s=document.getElementById('t2status');
+      if(!f){ setStatus(s,'err','Please choose a timecard .xlsx first.'); return; }
+      const fd=new FormData(); fd.append('xlsx',f);
+      post('/api/timecard-to-pdf',fd,s,btn);
+    }
+    if(tool==='t3'){
+      const ps=document.getElementById('t3ps').files[0];
+      const tc=document.getElementById('t3tc').files[0];
+      const s=document.getElementById('t3status');
+      if(!ps||!tc){ setStatus(s,'err','Please choose both PDFs first.'); return; }
+      const fd=new FormData(); fd.append('paystubs',ps); fd.append('timecards',tc);
+      post('/api/combine',fd,s,btn);
+    }
+  });
+});
+</script>
+</body>
+</html>
