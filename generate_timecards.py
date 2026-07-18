@@ -102,8 +102,323 @@ def distribute(total_min, ndays, rng):
         vals[i] += d; vals[j] -= d
     return vals
 
-def build(emps, week_start, out_path, daysoff=None, seed=42):
+DEFAULT_SCHEDULE = {
+    "Mariya": {
+        "Tue": [
+            "10:57",
+            352
+        ],
+        "Wed": [
+            "10:56",
+            358
+        ],
+        "Thu": [
+            "15:59",
+            320
+        ],
+        "Fri": [
+            "10:58",
+            354
+        ],
+        "Sat": [
+            "10:58",
+            320
+        ],
+        "Sun": [
+            "10:58",
+            364
+        ]
+    },
+    "Reyna": {
+        "Mon": [
+            "15:57",
+            347
+        ],
+        "Wed": [
+            "15:58",
+            350
+        ],
+        "Thu": [
+            "11:58",
+            318
+        ],
+        "Fri": [
+            "16:02",
+            342
+        ],
+        "Sat": [
+            "16:26",
+            326
+        ],
+        "Sun": [
+            "16:32",
+            379
+        ]
+    },
+    "Taran": {
+        "Mon": [
+            "15:56",
+            404
+        ],
+        "Tue": [
+            "15:58",
+            403
+        ],
+        "Thu": [
+            "16:00",
+            369
+        ],
+        "Fri": [
+            "15:59",
+            400
+        ],
+        "Sat": [
+            "11:59",
+            377
+        ],
+        "Sun": [
+            "11:58",
+            397
+        ]
+    },
+    "Qadir": {
+        "Mon": [
+            "12:59",
+            482
+        ],
+        "Wed": [
+            "12:59",
+            477
+        ],
+        "Thu": [
+            "11:59",
+            450
+        ],
+        "Sat": [
+            "11:56",
+            450
+        ],
+        "Sun": [
+            "13:01",
+            487
+        ]
+    },
+    "Daniyal": {
+        "Thu": [
+            "12:58",
+            468
+        ],
+        "Fri": [
+            "12:57",
+            470
+        ],
+        "Sun": [
+            "12:56",
+            390
+        ]
+    },
+    "Gaurab": {
+        "Wed": [
+            "12:00",
+            497
+        ],
+        "Thu": [
+            "11:58",
+            497
+        ],
+        "Fri": [
+            "12:31",
+            461
+        ],
+        "Sat": [
+            "12:26",
+            468
+        ],
+        "Sun": [
+            "12:57",
+            382
+        ]
+    },
+    "Amarjit": {
+        "Wed": [
+            "14:56",
+            485
+        ],
+        "Thu": [
+            "14:59",
+            479
+        ],
+        "Fri": [
+            "15:26",
+            453
+        ],
+        "Sat": [
+            "15:27",
+            451
+        ],
+        "Sun": [
+            "14:50",
+            501
+        ]
+    },
+    "Darling": {
+        "Mon": [
+            "18:00",
+            359
+        ],
+        "Tue": [
+            "18:00",
+            359
+        ],
+        "Wed": [
+            "18:00",
+            359
+        ],
+        "Thu": [
+            "18:00",
+            320
+        ],
+        "Sat": [
+            "18:00",
+            359
+        ],
+        "Sun": [
+            "18:00",
+            319
+        ]
+    },
+    "Martha": {
+        "Mon": [
+            "9:58",
+            397
+        ],
+        "Wed": [
+            "10:02",
+            393
+        ],
+        "Thu": [
+            "9:56",
+            402
+        ],
+        "Fri": [
+            "10:03",
+            389
+        ],
+        "Sat": [
+            "9:59",
+            398
+        ],
+        "Sun": [
+            "10:01",
+            317
+        ]
+    },
+    "Ganesh Bahadur": {
+        "Mon": [
+            "11:58",
+            297
+        ],
+        "Wed": [
+            "12:02",
+            292
+        ],
+        "Thu": [
+            "11:57",
+            295
+        ],
+        "Fri": [
+            "12:03",
+            289
+        ],
+        "Sat": [
+            "11:59",
+            294
+        ],
+        "Sun": [
+            "12:01",
+            307
+        ]
+    },
+    "Joghishwar": {
+        "Mon": [
+            "12:01",
+            348
+        ],
+        "Wed": [
+            "12:05",
+            343
+        ],
+        "Thu": [
+            "12:00",
+            345
+        ],
+        "Fri": [
+            "12:06",
+            341
+        ],
+        "Sat": [
+            "12:02",
+            344
+        ],
+        "Sun": [
+            "12:04",
+            341
+        ]
+    }
+}
+
+
+IDX2ABBR = {0:"Mon",1:"Tue",2:"Wed",3:"Thu",4:"Fri",5:"Sat",6:"Sun"}
+
+def distribute_weighted(total_min, weights, rng):
+    """Split total_min across days ~proportionally to weights, exact sum,
+    with a little minute-level jitter so no two days look identical."""
+    sw = sum(weights) or 1
+    vals = [int(total_min * w / sw) for w in weights]
+    rem = total_min - sum(vals)
+    order = sorted(range(len(vals)), key=lambda k: -weights[k])
+    i = 0
+    while rem > 0 and order:
+        vals[order[i % len(order)]] += 1; rem -= 1; i += 1
+    if len(vals) > 1:
+        for _ in range(len(vals)):
+            a, b = rng.sample(range(len(vals)), 2)
+            if vals[b] > 6:
+                d = rng.randint(1, 4); vals[a] += d; vals[b] -= d
+    return vals
+
+def resolve_schedule(emps, spec):
+    """Map schedule aliases (Mariya, Qadir, ...) to paystub employee names,
+    fuzzy-matched like the days-off resolver. Returns {emp_name: profile}."""
+    if not spec: return {}
+    names = [n for n, _ in emps]
+    remaining = set(names)
+    resolved = {}
+    scored = []
+    for alias in spec:
+        na = _norm(alias)
+        for name in names:
+            nn = _norm(name)
+            r = difflib.SequenceMatcher(None, na, nn).ratio()
+            if na and (na in nn or nn.startswith(na)):
+                r = max(r, 0.9)
+            scored.append((r, alias, name))
+    scored.sort(reverse=True)
+    used = set()
+    for r, alias, name in scored:
+        if alias in used or name not in remaining or r < 0.5:
+            continue
+        resolved[name] = spec[alias]; remaining.discard(name); used.add(alias)
+    left_alias = [a for a in spec if a not in used]
+    left_names = [n for n in names if n in remaining]
+    for alias, name in zip(left_alias, left_names):
+        resolved[name] = spec[alias]
+    return resolved
+
+
+def build(emps, week_start, out_path, daysoff=None, seed=42, schedule=None):
     daysoff = daysoff or {}
+    schedule = schedule or {}
     rng = random.Random(seed)
     dates = [(week_start + datetime.timedelta(days=i)) for i in range(7)] if week_start else [None]*7
     date_strs = [f"{d.month}/{d.day}/{d.year}" if d else "" for d in dates]
@@ -118,17 +433,30 @@ def build(emps, week_start, out_path, daysoff=None, seed=42):
     wb = Workbook(); wb.remove(wb.active)
     for name, tot in emps:
         total_min = hm_to_min(tot)
-        if name in daysoff:
-            off_idx = set(daysoff[name])
+        prof = schedule.get(name)
+        day_start = {}
+        if prof:
+            items = [(ABBR[k.lower()], v) for k, v in prof.items() if k.lower() in ABBR]
+            items.sort()
+            work_idx = [i for i, _ in items]
+            off_idx = set(range(7)) - set(work_idx)
+            weights = [v[1] for _, v in items]
+            shifts = distribute_weighted(total_min, weights, rng)
+            day_hours = {work_idx[k]: shifts[k] for k in range(len(work_idx))}
+            for i, v in items:
+                day_start[i] = hm_to_min(v[0])
         else:
-            ndays = max(4, min(7, round(total_min/60/5.7)))
-            off = 7 - ndays
-            off_idx = set([1,3,5,6,4,2,0][:off]) if off > 0 else set()
-        work_idx = [i for i in range(7) if i not in off_idx]
-        if not work_idx:  # safety: never zero working days
-            work_idx = [0]; off_idx.discard(0)
-        shifts = distribute(total_min, len(work_idx), rng)
-        day_hours = {i: shifts[k] for k, i in enumerate(work_idx)}
+            if name in daysoff:
+                off_idx = set(daysoff[name])
+            else:
+                ndays = max(4, min(7, round(total_min/60/5.7)))
+                off = 7 - ndays
+                off_idx = set([1,3,5,6,4,2,0][:off]) if off > 0 else set()
+            work_idx = [i for i in range(7) if i not in off_idx]
+            if not work_idx:  # safety: never zero working days
+                work_idx = [0]; off_idx.discard(0)
+            shifts = distribute(total_min, len(work_idx), rng)
+            day_hours = {i: shifts[k] for k, i in enumerate(work_idx)}
 
         ws = wb.create_sheet(title=name[:31])
         for c, w in enumerate([12,13,11,12,11,16], start=1):
@@ -166,7 +494,11 @@ def build(emps, week_start, out_path, daysoff=None, seed=42):
                 oc = ws.cell(row=r, column=3, value="OFF"); oc.font = Font(italic=True, color="808080")
                 ws.cell(row=r, column=5, value="-")
             else:
-                cin = 12*60 + rng.randint(0, 7); mins = day_hours[i]
+                if i in day_start:
+                    cin = max(0, day_start[i] + rng.randint(-3, 4))
+                else:
+                    cin = 12*60 + rng.randint(0, 7)
+                mins = day_hours[i]
                 ws.cell(row=r, column=3, value=min_to_hm(cin))
                 ws.cell(row=r, column=4, value=min_to_hm(cin+mins))
                 ws.cell(row=r, column=5, value=min_to_hm(mins))
@@ -227,6 +559,8 @@ def main():
     ap.add_argument("--pdf", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--daysoff", help="JSON file: {alias: [weekday abbrevs]}")
+    ap.add_argument("--schedule", help="JSON file of real schedules; overrides the "
+                    "built-in one. Pass 'none' to disable schedules entirely.")
     ap.add_argument("--seed", type=int, default=42)
     a = ap.parse_args()
     emps, week_start = parse_pdf(a.pdf)
@@ -241,7 +575,13 @@ def main():
         for alias, name, r in report:
             tag = "by-order" if r == 0.0 else f"{r:.2f}"
             print(f"  {alias:<18} -> {name:<26} ({tag}) off={[DAYS[i][:3] for i in daysoff[name]]}")
-    build(emps, week_start, a.out, daysoff, a.seed)
+    spec = DEFAULT_SCHEDULE
+    if a.schedule:
+        spec = {} if a.schedule.lower() == "none" else json.load(open(a.schedule))
+    schedule = resolve_schedule(emps, spec)
+    if schedule:
+        print("Using real schedules for:", ", ".join(sorted(schedule)))
+    build(emps, week_start, a.out, daysoff, a.seed, schedule)
     if not verify(a.out, daysoff):
         print("Verification failed.", file=sys.stderr); sys.exit(2)
     print(f"Saved {a.out}")
