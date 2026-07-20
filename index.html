@@ -94,6 +94,22 @@
     <div class="status" id="t3status"></div>
   </section>
 
+  <!-- TOOL 4 (chain) -->
+  <section class="card" id="tool4">
+    <h2>4 &nbsp;All-in-one: Paystub &rarr; Combined PDF</h2>
+    <p class="sub">Upload just a <b>paystubs PDF</b>. This runs all three steps automatically — makes the time cards, converts them to PDF, and combines them — and gives you back one PDF with each employee's paystub on top and their matching time card below. <i>Needs LibreOffice installed (same as tool 2).</i></p>
+    <div class="row">
+      <label class="drop" data-for="t4pdf">Choose paystubs PDF<small>.pdf</small>
+        <input type="file" id="t4pdf" accept=".pdf"></label>
+      <button class="go" data-tool="t4">Make Combined PDF</button>
+    </div>
+    <details>
+      <summary>Optional: days off per employee (JSON)</summary>
+      <textarea id="t4days" placeholder='{"Mariya": ["Mon"], "Qadir": ["Tue","Fri"]}'></textarea>
+    </details>
+    <div class="status" id="t4status"></div>
+  </section>
+
 </main>
 <footer>Runs entirely on this computer. Time cards are a model total, not a real attendance record.</footer>
 
@@ -112,7 +128,7 @@ function bind(id){
     if(e.dataTransfer.files.length){ input.files=e.dataTransfer.files;
       input.dispatchEvent(new Event('change')); }});
 }
-['t1pdf','t2xlsx','t3ps','t3tc'].forEach(bind);
+['t1pdf','t2xlsx','t3ps','t3tc','t4pdf'].forEach(bind);
 
 function setStatus(el,cls,html){ el.className='status '+cls; el.innerHTML=html; }
 
@@ -159,6 +175,15 @@ document.querySelectorAll('button.go').forEach(btn=>{
       if(!ps||!tc){ setStatus(s,'err','Please choose both PDFs first.'); return; }
       const fd=new FormData(); fd.append('paystubs',ps); fd.append('timecards',tc);
       post('/api/combine',fd,s,btn);
+    }
+    if(tool==='t4'){
+      const f=document.getElementById('t4pdf').files[0];
+      const s=document.getElementById('t4status');
+      if(!f){ setStatus(s,'err','Please choose a paystubs PDF first.'); return; }
+      const fd=new FormData(); fd.append('pdf',f);
+      const days=document.getElementById('t4days').value.trim();
+      if(days) fd.append('daysoff_text',days);
+      post('/api/chain',fd,s,btn);
     }
   });
 });
